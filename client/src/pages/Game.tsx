@@ -43,6 +43,7 @@ export default function Game() {
   const { data: gameData, isLoading: gameLoading } = useQuery<GameWithPlayers>({
     queryKey: ["/api/game", currentGameId],
     enabled: !!currentGameId,
+    staleTime: 0,
     refetchInterval: (query) => {
       if (query.state.data?.status === "waiting") return 2000;
       return false;
