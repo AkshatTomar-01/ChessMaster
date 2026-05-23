@@ -34,6 +34,7 @@ export default function Game() {
   const [showGameCodeModal, setShowGameCodeModal] = useState(mode === "friendly");
   const [currentGameId, setCurrentGameId] = useState<string | null>(gameId);
   const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
+  const [hostGameCode, setHostGameCode] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const currentUserId = getCurrentUserId();
@@ -42,6 +43,10 @@ export default function Game() {
   const { data: gameData, isLoading: gameLoading } = useQuery<GameWithPlayers>({
     queryKey: ["/api/game", currentGameId],
     enabled: !!currentGameId,
+    refetchInterval: (data) => {
+      if (data?.status === "waiting") return 2000;
+      return false;
+    },
   });
 
   useEffect(() => {
@@ -107,6 +112,7 @@ export default function Game() {
       setShowGameCodeModal(false);
       
       if (data.gameCode) {
+        setHostGameCode(data.gameCode);
         toast({
           title: "Game created!",
           description: `Game code: ${data.gameCode}`,
@@ -249,17 +255,30 @@ export default function Game() {
   }
 
   if (gameData?.status === "waiting" && (mode === "online" || mode === "friendly")) {
+    const displayCode = hostGameCode || gameData.gameCode;
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="w-96">
           <CardContent className="p-12 text-center">
             <Users className="w-16 h-16 mx-auto mb-4 text-primary" />
             <h2 className="text-2xl font-bold mb-2">Waiting for opponent...</h2>
-            <p className="text-muted-foreground mb-4">
-              {mode === "friendly" && gameData.gameCode 
-                ? `Share game code: ${gameData.gameCode}`
-                : "Waiting for another player to join"}
-            </p>
+            {mode === "friendly" && displayCode ? (
+              <div className="mb-6">
+                <p className="text-sm text-muted-foreground mb-3">Share this code with your friend:</p>
+                <div
+                  className="text-4xl font-mono font-bold tracking-widest bg-muted rounded-lg py-4 px-6 cursor-pointer hover:bg-muted/80 transition-colors"
+                  onClick={() => {
+                    navigator.clipboard.writeText(displayCode);
+                    toast({ title: "Copied!", description: "Game code copied to clipboard" });
+                  }}
+                >
+                  {displayCode}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Click to copy</p>
+              </div>
+            ) : (
+              <p className="text-muted-foreground mb-4">Waiting for another player to join</p>
+            )}
             <Button onClick={() => setLocation("/dashboard")} variant="outline" data-testid="button-cancel">
               Cancel
             </Button>
