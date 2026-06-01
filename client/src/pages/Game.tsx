@@ -54,11 +54,17 @@ export default function Game() {
   useEffect(() => {
     if (gameData) {
       const chess = new Chess();
-      if (gameData.fen) {
+      if (gameData.pgn && gameData.pgn.trim() !== "") {
+        try {
+          chess.loadPgn(gameData.pgn);
+        } catch {
+          if (gameData.fen) chess.load(gameData.fen);
+        }
+      } else if (gameData.fen) {
         chess.load(gameData.fen);
       }
       setGame(chess);
-      
+
       if (gameData.player2Id === currentUserId) {
         setPlayerColor("black");
       }
@@ -80,7 +86,8 @@ export default function Game() {
         
         if (data.type === "move") {
           setGame(prevGame => {
-            const newGame = new Chess(prevGame.fen());
+            const newGame = new Chess();
+            try { newGame.loadPgn(prevGame.pgn()); } catch { newGame.load(prevGame.fen()); }
             newGame.move({ from: data.from, to: data.to, promotion: data.promotion });
             return newGame;
           });
@@ -160,7 +167,12 @@ export default function Game() {
     const move = game.move({ from, to, promotion: promotion as any });
     if (!move) return;
 
-    setGame(new Chess(game.fen()));
+    setGame(prev => {
+      const updated = new Chess();
+      try { updated.loadPgn(prev.pgn()); } catch { updated.load(prev.fen()); }
+      updated.move({ from, to, promotion: promotion as any });
+      return updated;
+    });
 
     if (mode === "online" || mode === "friendly") {
       wsRef.current?.send(JSON.stringify({
@@ -362,8 +374,8 @@ export default function Game() {
       </header>
 
       <div className="container mx-auto px-6 py-8">
-        <div className="grid lg:grid-cols-[300px_1fr_320px] gap-6 items-start">
-          <div className="lg:block">
+        <div className="grid lg:grid-cols-[280px_1fr_320px] gap-6 items-start">
+          <div className="hidden lg:block">
             <MoveList game={game} />
           </div>
 
@@ -439,7 +451,9 @@ export default function Game() {
               </CardContent>
             </Card>
 
-
+            <div className="lg:hidden">
+              <MoveList game={game} />
+            </div>
           </div>
 
           <div className="space-y-6">
