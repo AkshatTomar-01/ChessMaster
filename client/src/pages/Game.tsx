@@ -35,6 +35,7 @@ export default function Game() {
   const [currentGameId, setCurrentGameId] = useState<string | null>(gameId);
   const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
   const [hostGameCode, setHostGameCode] = useState<string | null>(null);
+  const [lastOpponentMove, setLastOpponentMove] = useState<{ from: Square; to: Square } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const currentUserId = getCurrentUserId();
@@ -83,6 +84,7 @@ export default function Game() {
             newGame.move({ from: data.from, to: data.to, promotion: data.promotion });
             return newGame;
           });
+          setLastOpponentMove({ from: data.from as Square, to: data.to as Square });
           queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
         } else if (data.type === "chat") {
           queryClient.invalidateQueries({ queryKey: [`/api/game/chat/${currentGameId}`] });
@@ -137,6 +139,9 @@ export default function Game() {
       const newGame = new Chess();
       newGame.loadPgn(data.pgn);
       setGame(newGame);
+      if (data.aiMove) {
+        setLastOpponentMove({ from: data.aiMove.from as Square, to: data.aiMove.to as Square });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
     },
     onError: (error: Error) => {
@@ -358,7 +363,7 @@ export default function Game() {
 
       <div className="container mx-auto px-6 py-8">
         <div className="grid lg:grid-cols-[300px_1fr_320px] gap-6 items-start">
-          <div className="hidden lg:block">
+          <div className="lg:block">
             <MoveList game={game} />
           </div>
 
@@ -399,6 +404,7 @@ export default function Game() {
                   onMove={handleMove}
                   disabled={gameData?.status === "finished" || gameLoading || !isMyTurn()}
                   orientation={playerColor}
+                  lastOpponentMove={lastOpponentMove}
                   data-testid="chessboard"
                 />
               </div>
@@ -433,9 +439,7 @@ export default function Game() {
               </CardContent>
             </Card>
 
-            <div className="lg:hidden">
-              <MoveList game={game} />
-            </div>
+
           </div>
 
           <div className="space-y-6">
