@@ -163,16 +163,13 @@ export default function Game() {
   const handleMove = (from: Square, to: Square, promotion?: string) => {
     if (!currentGameId) return;
     if (gameData?.status === "finished") return;
-    
-    const move = game.move({ from, to, promotion: promotion as any });
+
+    const testMove = new Chess();
+    try { testMove.loadPgn(game.pgn()); } catch { testMove.load(game.fen()); }
+    const move = testMove.move({ from, to, promotion: promotion as any });
     if (!move) return;
 
-    setGame(prev => {
-      const updated = new Chess();
-      try { updated.loadPgn(prev.pgn()); } catch { updated.load(prev.fen()); }
-      updated.move({ from, to, promotion: promotion as any });
-      return updated;
-    });
+    setGame(testMove);
 
     if (mode === "online" || mode === "friendly") {
       wsRef.current?.send(JSON.stringify({
