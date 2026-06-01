@@ -119,21 +119,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserGames(userId: string, limit: number = 10, onlyFinished = false): Promise<GameWithPlayers[]> {
-    const conditions = [
-      or(
-        eq(games.player1Id, userId),
-        eq(games.player2Id, userId)
-      )!,
-    ];
+    const playerCondition = or(
+      eq(games.player1Id, userId),
+      eq(games.player2Id, userId)
+    )!;
 
-    if (onlyFinished) {
-      conditions.push(eq(games.status, "finished"));
-    }
+    const whereClause = onlyFinished
+      ? and(playerCondition, eq(games.status, "finished"))
+      : playerCondition;
 
     const userGames = await db
       .select()
       .from(games)
-      .where(and(...conditions))
+      .where(whereClause)
       .orderBy(desc(games.createdAt))
       .limit(limit);
 
