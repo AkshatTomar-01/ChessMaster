@@ -60,7 +60,9 @@ function AnimatedBoard() {
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: (ri*8+fi)*0.008, duration: 0.25 }}
-                  className={isWhite ? "drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]" : "drop-shadow-[0_2px_4px_rgba(255,255,255,0.2)]"}
+                  className={isWhite
+                    ? "text-white [text-shadow:0_0_3px_#000,0_1px_5px_#000,0_2px_8px_rgba(0,0,0,0.9)]"
+                    : "text-[#111] [text-shadow:0_0_3px_rgba(255,255,255,0.95),0_1px_5px_rgba(255,255,255,0.8),0_2px_8px_rgba(255,255,255,0.6)]"}
                 >
                   {piece}
                 </motion.span>

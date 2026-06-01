@@ -150,7 +150,9 @@ export default function Chessboard({
                       transition={{ duration: 0.15 }}
                       className={`
                         select-none pointer-events-none
-                        ${piece.color === "w" ? "text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" : "text-gray-900 drop-shadow-[0_2px_4px_rgba(255,255,255,0.3)]"}
+                        ${piece.color === "w"
+                          ? "text-white [text-shadow:0_0_3px_#000,0_1px_6px_#000,0_2px_8px_rgba(0,0,0,0.9)]"
+                          : "text-[#1a1a1a] [text-shadow:0_0_3px_rgba(255,255,255,0.9),0_1px_6px_rgba(255,255,255,0.7),0_2px_8px_rgba(255,255,255,0.5)]"}
                       `}
                     >
                       {pieceSymbols[piece.type.toUpperCase()]}

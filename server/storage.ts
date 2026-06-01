@@ -27,7 +27,7 @@ export interface IStorage {
   getGameWithPlayers(id: string): Promise<GameWithPlayers | undefined>;
   updateGameFen(id: string, fen: string, pgn: string): Promise<void>;
   finishGame(id: string, result: string, winnerId?: string): Promise<void>;
-  getUserGames(userId: string, limit?: number): Promise<GameWithPlayers[]>;
+  getUserGames(userId: string, limit?: number, onlyFinished?: boolean): Promise<GameWithPlayers[]>;
   getGameByCode(code: string): Promise<Game | undefined>;
   joinGame(gameId: string, player2Id: string): Promise<void>;
   findWaitingOnlineGame(excludeUserId: string): Promise<Game | undefined>;
@@ -118,16 +118,22 @@ export class DatabaseStorage implements IStorage {
       .where(eq(games.id, id));
   }
 
-  async getUserGames(userId: string, limit: number = 10): Promise<GameWithPlayers[]> {
+  async getUserGames(userId: string, limit: number = 10, onlyFinished = false): Promise<GameWithPlayers[]> {
+    const conditions = [
+      or(
+        eq(games.player1Id, userId),
+        eq(games.player2Id, userId)
+      )!,
+    ];
+
+    if (onlyFinished) {
+      conditions.push(eq(games.status, "finished"));
+    }
+
     const userGames = await db
       .select()
       .from(games)
-      .where(
-        or(
-          eq(games.player1Id, userId),
-          eq(games.player2Id, userId)
-        )
-      )
+      .where(and(...conditions))
       .orderBy(desc(games.createdAt))
       .limit(limit);
 

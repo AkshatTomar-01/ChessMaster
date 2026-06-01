@@ -343,7 +343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/game/recent", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const games = await storage.getUserGames(req.userId!, 5);
+      const games = await storage.getUserGames(req.userId!, 5, true);
       res.json(games);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -352,7 +352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/game/history", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const games = await storage.getUserGames(req.userId!, 50);
+      const games = await storage.getUserGames(req.userId!, 50, true);
       res.json(games);
     } catch (error: any) {
       res.status(500).json({ message: error.message });

@@ -49,6 +49,12 @@ export default function Profile() {
     return username.substring(0, 2).toUpperCase();
   };
 
+  const getOpponentName = (game: GameWithPlayers) => {
+    if (game.mode === "ai") return "Stockfish AI";
+    if (game.player1Id === profile?.id) return game.player2?.username || "Unknown";
+    return game.player1?.username || "Unknown";
+  };
+
   const totalGames = (profile?.wins || 0) + (profile?.losses || 0) + (profile?.draws || 0);
   const winRate = totalGames > 0 ? Math.round(((profile?.wins || 0) / totalGames) * 100) : 0;
 
@@ -175,8 +181,8 @@ export default function Profile() {
                     <div className="flex items-center gap-4">
                       <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColor}`} />
                       <div>
-                        <div className="font-medium text-sm capitalize group-hover:text-primary transition-colors">{game.mode} Game</div>
-                        <div className="text-xs text-muted-foreground">{new Date(game.createdAt).toLocaleString()}</div>
+                        <div className="font-medium text-sm group-hover:text-primary transition-colors">{getOpponentName(game)}</div>
+                        <div className="text-xs text-muted-foreground capitalize">{game.mode} · {new Date(game.createdAt).toLocaleString()}</div>
                       </div>
                     </div>
                     <Badge className={`border text-xs ${resultClass}`}>{resultLabel}</Badge>
