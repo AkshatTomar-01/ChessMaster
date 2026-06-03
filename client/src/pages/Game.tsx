@@ -9,10 +9,10 @@ import ChatPanel from "@/components/ChatPanel";
 import DifficultySelector from "@/components/DifficultySelector";
 import GameCodeModal from "@/components/GameCodeModal";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Crown, Users, Trophy, Frown, Handshake } from "lucide-react";
 import { getCurrentUserId, getCurrentUsername } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -309,7 +309,8 @@ export default function Game() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+      {/* Result overlay */}
       {gameData?.status === "finished" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-card border rounded-2xl p-10 text-center max-w-sm w-full mx-4 shadow-2xl">
@@ -326,7 +327,7 @@ export default function Game() {
                   <div className="absolute inset-0 blur-xl bg-yellow-400/30 rounded-full" />
                 </div>
                 <h2 className="text-3xl font-bold mb-2 text-yellow-400">Victory!</h2>
-                <p className="text-muted-foreground mb-8">Congratulations, you won the game!</p>
+                <p className="text-muted-foreground mb-8">Congratulations, you won!</p>
               </>
             ) : (
               <>
@@ -335,137 +336,123 @@ export default function Game() {
                 <p className="text-muted-foreground mb-8">Better luck next time!</p>
               </>
             )}
-            <Button
-              size="lg"
-              className="w-full"
-              onClick={() => {
-                queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
-                queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
-                setLocation("/dashboard");
-              }}
-            >
-              Continue
-            </Button>
+            <Button size="lg" className="w-full" onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
+              setLocation("/dashboard");
+            }}>Continue</Button>
           </div>
         </div>
       )}
 
-      <header className="border-b bg-card/50 backdrop-blur-lg sticky top-0 z-40">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              onClick={() => setLocation("/dashboard")}
-              data-testid="button-back"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-            <div className="flex items-center gap-2">
-              <Crown className="w-6 h-6 text-primary" />
-              <span className="text-xl font-bold">ChessMaster</span>
-            </div>
-            <div className="w-24" />
+      {/* Slim header */}
+      <header className="shrink-0 border-b bg-card/50 backdrop-blur-lg z-40">
+        <div className="px-4 h-11 flex items-center justify-between">
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-sm" onClick={() => setLocation("/dashboard")} data-testid="button-back">
+            <ArrowLeft className="w-4 h-4 mr-1" />Back
+          </Button>
+          <div className="flex items-center gap-1.5">
+            <Crown className="w-4 h-4 text-primary" />
+            <span className="text-sm font-bold">ChessMaster</span>
           </div>
+          <div className="w-16" />
         </div>
       </header>
 
-      <div className="container mx-auto px-6 py-8">
-        <div className="grid lg:grid-cols-[280px_1fr_320px] gap-6 items-start">
-          <div className="hidden lg:block">
-            <MoveList game={game} />
-          </div>
+      {/* Game area — flex row, fills viewport */}
+      <div className="flex-1 flex gap-2 p-2 min-h-0 overflow-hidden">
 
-          <div className="space-y-6">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarFallback className="bg-muted">
-                        {getInitials(getOpponentName())}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium">{getOpponentName()}</div>
-                      <div className="text-sm text-muted-foreground flex items-center gap-1">
-                        <span className={`w-2 h-2 rounded-full inline-block ${playerColor === "white" ? "bg-gray-800 border border-gray-400" : "bg-white border border-gray-400"}`} />
-                        {playerColor === "white" ? "Black" : "White"}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!isMyTurn() && gameData?.status === "active" && (
-                      <Badge className="bg-primary text-primary-foreground animate-pulse">Thinking...</Badge>
-                    )}
-                    {gameData?.status === "finished" && gameData.winnerId !== currentUserId && gameData.winnerId && (
-                      <Badge variant="destructive">Winner</Badge>
-                    )}
-                  </div>
+        {/* LEFT: Move history */}
+        <div className="hidden lg:flex flex-col w-44 xl:w-52 shrink-0 min-h-0">
+          <MoveList game={game} />
+        </div>
+
+        {/* CENTER: Player info + Board */}
+        <div className="flex-1 flex flex-col justify-between min-h-0 min-w-0 items-center gap-1.5">
+          {/* Opponent row */}
+          <div className="w-full flex items-center justify-between px-1" style={{ maxWidth: "min(calc(100vh - 130px), 600px)" }}>
+            <div className="flex items-center gap-2">
+              <Avatar className="w-7 h-7">
+                <AvatarFallback className="text-[10px] bg-muted">{getInitials(getOpponentName())}</AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="font-semibold text-sm leading-none">{getOpponentName()}</div>
+                <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <span className={`w-1.5 h-1.5 rounded-full inline-block ${playerColor === "white" ? "bg-gray-800 border border-gray-500" : "bg-white border border-gray-300"}`} />
+                  {playerColor === "white" ? "Black" : "White"}
                 </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-center">
-              <div className="w-full max-w-2xl">
-                <Chessboard
-                  game={game}
-                  onMove={handleMove}
-                  disabled={gameData?.status === "finished" || gameLoading || !isMyTurn()}
-                  orientation={playerColor}
-                  lastOpponentMove={lastOpponentMove}
-                  data-testid="chessboard"
-                />
               </div>
             </div>
+            {!isMyTurn() && gameData?.status === "active" && (
+              <Badge className="bg-primary text-primary-foreground animate-pulse text-[10px] px-1.5 py-0.5">Thinking...</Badge>
+            )}
+          </div>
 
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {getInitials(currentUsername || undefined)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium">{currentUsername}</div>
-                      <div className="text-sm text-muted-foreground flex items-center gap-1">
-                        <span className={`w-2 h-2 rounded-full inline-block ${playerColor === "white" ? "bg-white border border-gray-400" : "bg-gray-800 border border-gray-400"}`} />
-                        {playerColor === "white" ? "White" : "Black"}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isMyTurn() && gameData?.status === "active" && (
-                      <Badge className="bg-chart-2 text-white animate-pulse">Your turn</Badge>
-                    )}
-                    {gameData?.status === "finished" && gameData.winnerId === currentUserId && (
-                      <Badge className="bg-chart-2 text-chart-2-foreground">Winner</Badge>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="lg:hidden">
-              <MoveList game={game} />
+          {/* Board — square, sized to fit remaining height */}
+          <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+            <div
+              className="w-full h-full"
+              style={{
+                maxWidth: "min(calc(100vh - 130px), calc(100vw - 440px), 600px)",
+                maxHeight: "min(calc(100vh - 130px), calc(100vw - 440px), 600px)",
+                aspectRatio: "1",
+              }}
+            >
+              <Chessboard
+                game={game}
+                onMove={handleMove}
+                disabled={gameData?.status === "finished" || gameLoading || !isMyTurn()}
+                orientation={playerColor}
+                lastOpponentMove={lastOpponentMove}
+                data-testid="chessboard"
+              />
             </div>
           </div>
 
-          <div className="space-y-6">
-            <GameControls
-              gameStatus={gameData?.status || "active"}
-              onResign={handleResign}
-              onOfferDraw={handleOfferDraw}
-              gameResult={gameData?.result || null}
-            />
-            
-            {currentGameId && (mode === "online" || mode === "friendly") && (
-              <ChatPanel gameId={currentGameId} />
+          {/* Your row */}
+          <div className="w-full flex items-center justify-between px-1" style={{ maxWidth: "min(calc(100vh - 130px), 600px)" }}>
+            <div className="flex items-center gap-2">
+              <Avatar className="w-7 h-7">
+                <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getInitials(currentUsername || undefined)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="font-semibold text-sm leading-none">{currentUsername}</div>
+                <div className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <span className={`w-1.5 h-1.5 rounded-full inline-block ${playerColor === "white" ? "bg-white border border-gray-300" : "bg-gray-800 border border-gray-500"}`} />
+                  {playerColor === "white" ? "White" : "Black"}
+                </div>
+              </div>
+            </div>
+            {isMyTurn() && gameData?.status === "active" && (
+              <Badge className="bg-chart-2 text-white animate-pulse text-[10px] px-1.5 py-0.5">Your turn</Badge>
             )}
           </div>
         </div>
+
+        {/* RIGHT: Controls + Chat */}
+        <div className="hidden md:flex flex-col w-52 xl:w-60 shrink-0 gap-2 min-h-0">
+          <GameControls
+            gameStatus={gameData?.status || "active"}
+            onResign={handleResign}
+            onOfferDraw={handleOfferDraw}
+            gameResult={gameData?.result || null}
+          />
+          {currentGameId && (mode === "online" || mode === "friendly") && (
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <ChatPanel gameId={currentGameId} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile bottom controls */}
+      <div className="md:hidden shrink-0 border-t bg-card/50 p-2">
+        <GameControls
+          gameStatus={gameData?.status || "active"}
+          onResign={handleResign}
+          onOfferDraw={handleOfferDraw}
+          gameResult={gameData?.result || null}
+        />
       </div>
     </div>
   );
