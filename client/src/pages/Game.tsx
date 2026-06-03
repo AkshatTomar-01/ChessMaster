@@ -100,6 +100,14 @@ export default function Game() {
           queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
         } else if (data.type === "playerJoined") {
           queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
+        } else if (data.type === "opponentAbandoned") {
+          queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
+          toast({
+            title: "Opponent abandoned",
+            description: "Your opponent has left the match. You win!",
+          });
+          setTimeout(() => setLocation("/dashboard"), 3000);
         }
       };
 

@@ -11,6 +11,21 @@ export const users = pgTable("users", {
   wins: integer("wins").notNull().default(0),
   losses: integer("losses").notNull().default(0),
   draws: integer("draws").notNull().default(0),
+  aiEasyWins: integer("ai_easy_wins").notNull().default(0),
+  aiEasyLosses: integer("ai_easy_losses").notNull().default(0),
+  aiEasyDraws: integer("ai_easy_draws").notNull().default(0),
+  aiMediumWins: integer("ai_medium_wins").notNull().default(0),
+  aiMediumLosses: integer("ai_medium_losses").notNull().default(0),
+  aiMediumDraws: integer("ai_medium_draws").notNull().default(0),
+  aiHardWins: integer("ai_hard_wins").notNull().default(0),
+  aiHardLosses: integer("ai_hard_losses").notNull().default(0),
+  aiHardDraws: integer("ai_hard_draws").notNull().default(0),
+  onlineWins: integer("online_wins").notNull().default(0),
+  onlineLosses: integer("online_losses").notNull().default(0),
+  onlineDraws: integer("online_draws").notNull().default(0),
+  friendlyWins: integer("friendly_wins").notNull().default(0),
+  friendlyLosses: integer("friendly_losses").notNull().default(0),
+  friendlyDraws: integer("friendly_draws").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -47,57 +62,25 @@ export const usersRelations = relations(users, ({ many }) => ({
 }));
 
 export const gamesRelations = relations(games, ({ one, many }) => ({
-  player1: one(users, {
-    fields: [games.player1Id],
-    references: [users.id],
-    relationName: "player1",
-  }),
-  player2: one(users, {
-    fields: [games.player2Id],
-    references: [users.id],
-    relationName: "player2",
-  }),
-  winner: one(users, {
-    fields: [games.winnerId],
-    references: [users.id],
-    relationName: "winner",
-  }),
+  player1: one(users, { fields: [games.player1Id], references: [users.id], relationName: "player1" }),
+  player2: one(users, { fields: [games.player2Id], references: [users.id], relationName: "player2" }),
+  winner: one(users, { fields: [games.winnerId], references: [users.id], relationName: "winner" }),
   chatMessages: many(chatMessages),
 }));
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
-  game: one(games, {
-    fields: [chatMessages.gameId],
-    references: [games.id],
-  }),
-  user: one(users, {
-    fields: [chatMessages.userId],
-    references: [users.id],
-  }),
+  game: one(games, { fields: [chatMessages.gameId], references: [games.id] }),
+  user: one(users, { fields: [chatMessages.userId], references: [users.id] }),
 }));
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export const insertGameSchema = createInsertSchema(games).pick({
-  mode: true,
-  difficulty: true,
-  gameCode: true,
-});
-
-export const insertChatMessageSchema = createInsertSchema(chatMessages).pick({
-  gameId: true,
-  message: true,
-});
+export const insertUserSchema = createInsertSchema(users).pick({ username: true, password: true });
+export const insertGameSchema = createInsertSchema(games).pick({ mode: true, difficulty: true, gameCode: true });
+export const insertChatMessageSchema = createInsertSchema(chatMessages).pick({ gameId: true, message: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
-
 export type InsertGame = z.infer<typeof insertGameSchema>;
 export type Game = typeof games.$inferSelect;
-
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 
@@ -107,6 +90,4 @@ export type GameWithPlayers = Game & {
   player2?: UserProfile;
   winner?: UserProfile;
 };
-export type ChatMessageWithUser = ChatMessage & {
-  user: UserProfile;
-};
+export type ChatMessageWithUser = ChatMessage & { user: UserProfile };

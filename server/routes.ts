@@ -264,24 +264,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.finishGame(gameId, result, winnerId);
 
         if (winnerId) {
-          const winner = await storage.getUser(winnerId);
-          const loser = await storage.getUser(winnerId === game.player1Id ? game.player2Id! : game.player1Id);
-          
-          if (winner) {
-            await storage.updateUserStats(winnerId, winner.wins + 1, winner.losses, winner.draws);
-          }
-          if (loser) {
-            await storage.updateUserStats(loser.id, loser.wins, loser.losses + 1, loser.draws);
-          }
+          const loserId = winnerId === game.player1Id ? game.player2Id! : game.player1Id;
+          await storage.updateUserStatsForMode(winnerId, game.mode, game.difficulty, "win");
+          if (loserId) await storage.updateUserStatsForMode(loserId, game.mode, game.difficulty, "loss");
         } else {
-          if (game.player1Id) {
-            const player1 = await storage.getUser(game.player1Id);
-            if (player1) await storage.updateUserStats(game.player1Id, player1.wins, player1.losses, player1.draws + 1);
-          }
-          if (game.player2Id) {
-            const player2 = await storage.getUser(game.player2Id);
-            if (player2) await storage.updateUserStats(game.player2Id, player2.wins, player2.losses, player2.draws + 1);
-          }
+          if (game.player1Id) await storage.updateUserStatsForMode(game.player1Id, game.mode, game.difficulty, "draw");
+          if (game.player2Id) await storage.updateUserStatsForMode(game.player2Id, game.mode, game.difficulty, "draw");
         }
       }
 
@@ -313,13 +301,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.finishGame(gameId, result, winnerId);
 
             if (winnerId) {
-              const winner = await storage.getUser(winnerId);
-              if (winner) await storage.updateUserStats(winnerId, winner.wins + 1, winner.losses, winner.draws);
+              await storage.updateUserStatsForMode(winnerId, game.mode, game.difficulty, "win");
             } else {
-              if (game.player1Id) {
-                const player1 = await storage.getUser(game.player1Id);
-                if (player1) await storage.updateUserStats(game.player1Id, player1.wins, player1.losses, player1.draws + 1);
-              }
+              if (game.player1Id) await storage.updateUserStatsForMode(game.player1Id, game.mode, game.difficulty, "draw");
             }
           }
         }
@@ -346,12 +330,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.finishGame(gameId, result, winnerId || undefined);
 
       if (winnerId) {
-        const winner = await storage.getUser(winnerId);
-        if (winner) await storage.updateUserStats(winnerId, winner.wins + 1, winner.losses, winner.draws);
+        await storage.updateUserStatsForMode(winnerId, game.mode, game.difficulty, "win");
       }
-      
-      const loser = await storage.getUser(req.userId!);
-      if (loser) await storage.updateUserStats(req.userId!, loser.wins, loser.losses + 1, loser.draws);
+      await storage.updateUserStatsForMode(req.userId!, game.mode, game.difficulty, "loss");
 
       res.json({ success: true });
     } catch (error: any) {
@@ -402,6 +383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   wss.on("connection", (ws: WebSocket) => {
     let currentGameId: string | null = null;
+    let currentUserId: string | null = null;
 
     ws.on("message", async (data: Buffer) => {
       try {
@@ -409,6 +391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (message.type === "join") {
           currentGameId = message.gameId;
+          currentUserId = message.userId;
           
           if (!gameConnections.has(currentGameId)) {
             gameConnections.set(currentGameId, new Set());
@@ -456,7 +439,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    ws.on("close", () => {
+    ws.on("close", async () => {
+      if (currentGameId && currentUserId) {
+        const activeGame = await storage.getGame(currentGameId);
+        if (activeGame && activeGame.status === "active") {
+          const winnerId = activeGame.player1Id === currentUserId
+            ? activeGame.player2Id
+            : activeGame.player1Id;
+          if (winnerId) {
+            const result = winnerId === activeGame.player1Id ? "white" : "black";
+            await storage.finishGame(currentGameId, result, winnerId);
+            await storage.updateUserStatsForMode(winnerId, activeGame.mode, activeGame.difficulty, "win");
+            await storage.updateUserStatsForMode(currentUserId, activeGame.mode, activeGame.difficulty, "loss");
+            const connections = gameConnections.get(currentGameId);
+            if (connections) {
+              connections.forEach((clientWs) => {
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(JSON.stringify({ type: "opponentAbandoned" }));
+                }
+              });
+            }
+          }
+        }
+      }
       if (currentGameId) {
         const connections = gameConnections.get(currentGameId);
         if (connections) {

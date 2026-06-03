@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Trophy, Target, Handshake, Calendar, Crown, BarChart2 } from "lucide-react";
+import { ArrowLeft, Trophy, Target, Handshake, Calendar, Crown, BarChart2, Bot, Globe, Swords } from "lucide-react";
 import { getCurrentUsername } from "@/lib/auth";
 import type { UserProfile, GameWithPlayers } from "@shared/schema";
 
@@ -28,6 +28,54 @@ function AnimatedNumber({ value }: { value: number }) {
     return () => controls.stop();
   }, [value]);
   return <span ref={ref}>0</span>;
+}
+
+interface ModeStatCardProps {
+  icon: React.ElementType;
+  iconColor: string;
+  iconBg: string;
+  border: string;
+  gradient: string;
+  label: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  delay: number;
+}
+
+function ModeStatCard({ icon: Icon, iconColor, iconBg, border, gradient, label, wins, losses, draws, delay }: ModeStatCardProps) {
+  return (
+    <motion.div
+      custom={delay}
+      variants={fadeUp}
+      initial="hidden"
+      animate="show"
+      className={`rounded-2xl border ${border} bg-gradient-to-br ${gradient} bg-card/60 backdrop-blur-sm p-5`}
+    >
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className={`w-7 h-7 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
+          <Icon className={`w-3.5 h-3.5 ${iconColor}`} />
+        </div>
+        <span className="text-sm font-semibold leading-tight">{label}</span>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-center flex-1">
+          <div className="text-xl font-bold text-emerald-400"><AnimatedNumber value={wins} /></div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">W</div>
+        </div>
+        <div className="w-px h-8 bg-border/50" />
+        <div className="text-center flex-1">
+          <div className="text-xl font-bold text-red-400"><AnimatedNumber value={losses} /></div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">L</div>
+        </div>
+        <div className="w-px h-8 bg-border/50" />
+        <div className="text-center flex-1">
+          <div className="text-xl font-bold text-amber-400"><AnimatedNumber value={draws} /></div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">D</div>
+        </div>
+      </div>
+    </motion.div>
+  );
 }
 
 export default function Profile() {
@@ -84,6 +132,7 @@ export default function Profile() {
       </header>
 
       <div className="container mx-auto px-6 py-10 max-w-4xl relative z-10">
+        {/* Profile card */}
         <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="rounded-2xl border border-border/50 bg-card/70 backdrop-blur-xl shadow-2xl p-8 mb-8">
           {profileLoading ? (
             <div className="flex items-center gap-8">
@@ -115,12 +164,13 @@ export default function Profile() {
           )}
         </motion.div>
 
+        {/* Overall stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Total",  value: totalGames,          icon: BarChart2, color: "text-foreground",   iconBg: "bg-muted",          border: "border-border/50",      gradient: "from-muted/30 to-transparent",       testId: "text-total-games" },
-            { label: "Wins",   value: profile?.wins   || 0, icon: Trophy,   color: "text-emerald-400",  iconBg: "bg-emerald-500/15", border: "border-emerald-500/20", gradient: "from-emerald-500/10 to-transparent", testId: "text-wins"        },
-            { label: "Losses", value: profile?.losses || 0, icon: Target,   color: "text-red-400",      iconBg: "bg-red-500/15",     border: "border-red-500/20",     gradient: "from-red-500/10 to-transparent",     testId: "text-losses"      },
-            { label: "Draws",  value: profile?.draws  || 0, icon: Handshake,color: "text-amber-400",    iconBg: "bg-amber-500/15",   border: "border-amber-500/20",   gradient: "from-amber-500/10 to-transparent",   testId: "text-draws"       },
+            { label: "Total",  value: totalGames,           icon: BarChart2, color: "text-foreground",   iconBg: "bg-muted",          border: "border-border/50",      gradient: "from-muted/30 to-transparent",       testId: "text-total-games" },
+            { label: "Wins",   value: profile?.wins   || 0, icon: Trophy,    color: "text-emerald-400",  iconBg: "bg-emerald-500/15", border: "border-emerald-500/20", gradient: "from-emerald-500/10 to-transparent", testId: "text-wins"        },
+            { label: "Losses", value: profile?.losses  || 0, icon: Target,   color: "text-red-400",      iconBg: "bg-red-500/15",     border: "border-red-500/20",     gradient: "from-red-500/10 to-transparent",     testId: "text-losses"      },
+            { label: "Draws",  value: profile?.draws   || 0, icon: Handshake,color: "text-amber-400",    iconBg: "bg-amber-500/15",   border: "border-amber-500/20",   gradient: "from-amber-500/10 to-transparent",   testId: "text-draws"       },
           ].map((stat, i) => (
             <motion.div key={stat.label} custom={i} variants={fadeUp} initial="hidden" animate="show"
               className={`rounded-2xl border ${stat.border} bg-gradient-to-br ${stat.gradient} bg-card/60 backdrop-blur-sm p-5`}
@@ -138,6 +188,7 @@ export default function Profile() {
           ))}
         </div>
 
+        {/* Win rate bar */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -159,6 +210,76 @@ export default function Profile() {
           </div>
         </motion.div>
 
+        {/* Stats by Mode */}
+        {totalGames > 0 && (
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="mb-8">
+            <h2 className="font-semibold text-base mb-4">Stats by Mode</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <ModeStatCard
+                icon={Bot}
+                iconColor="text-green-400"
+                iconBg="bg-green-500/15"
+                border="border-green-500/20"
+                gradient="from-green-500/8 to-transparent"
+                label="AI — Easy"
+                wins={profile?.aiEasyWins || 0}
+                losses={profile?.aiEasyLosses || 0}
+                draws={profile?.aiEasyDraws || 0}
+                delay={0}
+              />
+              <ModeStatCard
+                icon={Bot}
+                iconColor="text-primary"
+                iconBg="bg-primary/15"
+                border="border-primary/20"
+                gradient="from-primary/8 to-transparent"
+                label="AI — Medium"
+                wins={profile?.aiMediumWins || 0}
+                losses={profile?.aiMediumLosses || 0}
+                draws={profile?.aiMediumDraws || 0}
+                delay={1}
+              />
+              <ModeStatCard
+                icon={Bot}
+                iconColor="text-red-400"
+                iconBg="bg-red-500/15"
+                border="border-red-500/20"
+                gradient="from-red-500/8 to-transparent"
+                label="AI — Hard"
+                wins={profile?.aiHardWins || 0}
+                losses={profile?.aiHardLosses || 0}
+                draws={profile?.aiHardDraws || 0}
+                delay={2}
+              />
+              <ModeStatCard
+                icon={Globe}
+                iconColor="text-emerald-400"
+                iconBg="bg-emerald-500/15"
+                border="border-emerald-500/20"
+                gradient="from-emerald-500/8 to-transparent"
+                label="Online Match"
+                wins={profile?.onlineWins || 0}
+                losses={profile?.onlineLosses || 0}
+                draws={profile?.onlineDraws || 0}
+                delay={3}
+              />
+              <ModeStatCard
+                icon={Swords}
+                iconColor="text-amber-400"
+                iconBg="bg-amber-500/15"
+                border="border-amber-500/20"
+                gradient="from-amber-500/8 to-transparent"
+                label="Friendly Match"
+                wins={profile?.friendlyWins || 0}
+                losses={profile?.friendlyLosses || 0}
+                draws={profile?.friendlyDraws || 0}
+                delay={4}
+              />
+            </div>
+          </motion.div>
+        )}
+
+        {/* Match History */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="rounded-2xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-border/40">
             <h2 className="font-semibold text-base">Match History</h2>
