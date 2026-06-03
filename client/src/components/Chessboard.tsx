@@ -9,6 +9,7 @@ interface ChessboardProps {
   orientation?: "white" | "black";
   highlightMoves?: boolean;
   lastOpponentMove?: { from: Square; to: Square } | null;
+  lastMyMove?: { from: Square; to: Square } | null;
 }
 
 const pieceSymbols: Record<string, string> = {
@@ -26,10 +27,10 @@ export default function Chessboard({
   orientation = "white",
   highlightMoves = true,
   lastOpponentMove = null,
+  lastMyMove = null,
 }: ChessboardProps) {
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
-  const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
 
   const handleSquareClick = (square: Square) => {
     if (disabled) return;
@@ -44,7 +45,6 @@ export default function Chessboard({
         } else {
           onMove(selectedSquare, square);
         }
-        setLastMove({ from: selectedSquare, to: square });
         setSelectedSquare(null);
         setLegalMoves([]);
       } else {
@@ -75,15 +75,15 @@ export default function Chessboard({
 
   const isHighlighted = (sq: Square) => highlightMoves && legalMoves.includes(sq);
   const isSelected = (sq: Square) => selectedSquare === sq;
-  const isMyLastMove = (sq: Square) => !!(lastMove && (lastMove.from === sq || lastMove.to === sq));
-  const isOpponentLastMove = (sq: Square) => !!(lastOpponentMove && (lastOpponentMove.from === sq || lastOpponentMove.to === sq));
+  const isMyMove = (sq: Square) => !!(lastMyMove && (lastMyMove.from === sq || lastMyMove.to === sq));
+  const isOpponentMove = (sq: Square) => !!(lastOpponentMove && (lastOpponentMove.from === sq || lastOpponentMove.to === sq));
 
   const displayFiles = orientation === "white" ? files : [...files].reverse();
   const displayRanks = orientation === "white" ? ranks : [...ranks].reverse();
 
   return (
-    <div className="relative">
-      <div className="grid grid-cols-8 gap-0 border-2 border-border rounded-lg overflow-hidden shadow-xl">
+    <div className="w-full h-full">
+      <div className="grid grid-cols-8 w-full h-full border-2 border-border rounded-lg overflow-hidden shadow-xl">
         {displayRanks.map((rank, rankIndex) =>
           displayFiles.map((file, fileIndex) => {
             const square = `${file}${rank}` as Square;
@@ -95,42 +95,51 @@ export default function Chessboard({
                 onClick={() => handleSquareClick(square)}
                 disabled={disabled}
                 className={`
-                  aspect-square relative flex items-center justify-center text-5xl md:text-6xl lg:text-7xl
+                  relative flex items-center justify-center
                   transition-all duration-150
                   ${getSquareColor(fileIndex, rankIndex)}
                   ${isSelected(square) ? "ring-4 ring-primary ring-inset" : ""}
-                  ${!disabled && piece && piece.color === game.turn() ? "cursor-pointer hover-elevate" : ""}
+                  ${!disabled && piece && piece.color === game.turn() ? "cursor-pointer" : ""}
                   ${disabled ? "cursor-not-allowed" : ""}
                 `}
+                style={{ aspectRatio: "1" }}
                 whileTap={!disabled ? { scale: 0.95 } : {}}
                 data-testid={`square-${square}`}
               >
-                {/* My last move — amber tint */}
-                {isMyLastMove(square) && (
-                  <div className="absolute inset-0 bg-amber-400/30 pointer-events-none z-0" />
-                )}
-
-                {/* Opponent last move — teal glow */}
-                {isOpponentLastMove(square) && (
+                {/* My last move — amber glow */}
+                {isMyMove(square) && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.2 }}
                     className="absolute inset-0 pointer-events-none z-0"
                   >
-                    <div className="absolute inset-0 bg-primary/30" />
-                    <div className="absolute inset-0 shadow-[inset_0_0_0_3px_hsl(173,80%,40%),inset_0_0_14px_rgba(20,184,166,0.55)]" />
+                    <div className="absolute inset-0 bg-amber-400/40" />
+                    <div className="absolute inset-0 shadow-[inset_0_0_0_3px_rgba(251,191,36,0.8),inset_0_0_12px_rgba(251,191,36,0.4)]" />
                   </motion.div>
                 )}
 
-                {/* Legal move indicators */}
+                {/* Opponent last move — teal glow */}
+                {isOpponentMove(square) && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute inset-0 pointer-events-none z-0"
+                  >
+                    <div className="absolute inset-0 bg-primary/35" />
+                    <div className="absolute inset-0 shadow-[inset_0_0_0_3px_hsl(173,80%,40%),inset_0_0_14px_rgba(20,184,166,0.5)]" />
+                  </motion.div>
+                )}
+
+                {/* Legal move dots */}
                 {isHighlighted(square) && (
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
                   >
-                    <div className={`rounded-full ${piece ? "w-full h-full border-4 border-primary/50" : "w-4 h-4 bg-primary/60"}`} />
+                    <div className={`rounded-full ${piece ? "w-full h-full border-4 border-primary/50" : "w-[35%] h-[35%] bg-black/20"}`} />
                   </motion.div>
                 )}
 
@@ -142,12 +151,12 @@ export default function Chessboard({
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.8, opacity: 0 }}
-                      transition={{ duration: 0.15 }}
+                      transition={{ duration: 0.12 }}
                       className={`
-                        select-none pointer-events-none relative z-20
+                        select-none pointer-events-none relative z-20 text-4xl sm:text-5xl md:text-4xl lg:text-5xl xl:text-6xl
                         ${piece.color === "w"
-                          ? "text-white [text-shadow:0_0_3px_#000,0_1px_6px_#000,0_2px_8px_rgba(0,0,0,0.9)]"
-                          : "text-[#1a1a1a] [text-shadow:0_0_3px_rgba(255,255,255,0.9),0_1px_6px_rgba(255,255,255,0.7),0_2px_8px_rgba(255,255,255,0.5)]"}
+                          ? "text-white [text-shadow:0_0_4px_#000,0_1px_6px_#000,0_2px_10px_rgba(0,0,0,0.95)]"
+                          : "text-[#111] [text-shadow:0_0_4px_rgba(255,255,255,1),0_1px_6px_rgba(255,255,255,0.9),0_2px_10px_rgba(255,255,255,0.6)]"}
                       `}
                     >
                       {pieceSymbols[piece.type.toUpperCase()]}
@@ -157,12 +166,12 @@ export default function Chessboard({
 
                 {/* Coordinate labels */}
                 {fileIndex === 0 && (
-                  <span className="absolute left-1 top-1 text-xs font-mono font-semibold opacity-60 pointer-events-none select-none z-30">
+                  <span className="absolute left-0.5 top-0.5 text-[9px] font-mono font-bold opacity-50 pointer-events-none select-none z-30 leading-none">
                     {rank}
                   </span>
                 )}
                 {rankIndex === displayRanks.length - 1 && (
-                  <span className="absolute right-1 bottom-1 text-xs font-mono font-semibold opacity-60 pointer-events-none select-none z-30">
+                  <span className="absolute right-0.5 bottom-0.5 text-[9px] font-mono font-bold opacity-50 pointer-events-none select-none z-30 leading-none">
                     {file}
                   </span>
                 )}

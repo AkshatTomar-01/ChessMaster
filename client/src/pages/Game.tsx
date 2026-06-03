@@ -36,6 +36,7 @@ export default function Game() {
   const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
   const [hostGameCode, setHostGameCode] = useState<string | null>(null);
   const [lastOpponentMove, setLastOpponentMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [lastMyMove, setLastMyMove] = useState<{ from: Square; to: Square } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const currentUserId = getCurrentUserId();
@@ -170,6 +171,7 @@ export default function Game() {
     if (!move) return;
 
     setGame(testMove);
+    setLastMyMove({ from, to });
 
     if (mode === "online" || mode === "friendly") {
       wsRef.current?.send(JSON.stringify({
@@ -404,6 +406,7 @@ export default function Game() {
                 disabled={gameData?.status === "finished" || gameLoading || !isMyTurn()}
                 orientation={playerColor}
                 lastOpponentMove={lastOpponentMove}
+                lastMyMove={lastMyMove}
                 data-testid="chessboard"
               />
             </div>
