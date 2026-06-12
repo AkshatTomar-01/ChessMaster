@@ -41,6 +41,8 @@ export const games = pgTable("games", {
   result: text("result"),
   winnerId: varchar("winner_id").references(() => users.id),
   currentTurn: text("current_turn").notNull().default("white"),
+  whiteTimeMs: integer("white_time_ms").notNull().default(1500000),
+  blackTimeMs: integer("black_time_ms").notNull().default(1500000),
   status: text("status").notNull().default("waiting"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

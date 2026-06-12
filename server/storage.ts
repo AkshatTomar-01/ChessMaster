@@ -17,7 +17,8 @@ export interface IStorage {
   createGame(game: Partial<Game> & { player1Id: string }): Promise<Game>;
   getGame(id: string): Promise<Game | undefined>;
   getGameWithPlayers(id: string): Promise<GameWithPlayers | undefined>;
-  updateGameFen(id: string, fen: string, pgn: string): Promise<void>;
+  updateGameFen(id: string, fen: string, pgn: string, currentTurn?: string, whiteTimeMs?: number, blackTimeMs?: number): Promise<void>;
+  updateGameTimers(id: string, whiteTimeMs: number, blackTimeMs: number): Promise<void>;
   finishGame(id: string, result: string, winnerId?: string): Promise<void>;
   getUserGames(userId: string, limit?: number, onlyFinished?: boolean): Promise<GameWithPlayers[]>;
   getGameByCode(code: string): Promise<Game | undefined>;
@@ -110,8 +111,19 @@ export class DatabaseStorage implements IStorage {
     return { ...game, player1, player2, winner };
   }
 
-  async updateGameFen(id: string, fen: string, pgn: string): Promise<void> {
-    await db.update(games).set({ fen, pgn, updatedAt: new Date() }).where(eq(games.id, id));
+  async updateGameFen(id: string, fen: string, pgn: string, currentTurn?: string, whiteTimeMs?: number, blackTimeMs?: number): Promise<void> {
+    await db.update(games).set({
+      fen,
+      pgn,
+      ...(currentTurn ? { currentTurn } : {}),
+      ...(whiteTimeMs !== undefined ? { whiteTimeMs } : {}),
+      ...(blackTimeMs !== undefined ? { blackTimeMs } : {}),
+      updatedAt: new Date(),
+    }).where(eq(games.id, id));
+  }
+
+  async updateGameTimers(id: string, whiteTimeMs: number, blackTimeMs: number): Promise<void> {
+    await db.update(games).set({ whiteTimeMs, blackTimeMs, updatedAt: new Date() }).where(eq(games.id, id));
   }
 
   async finishGame(id: string, result: string, winnerId?: string): Promise<void> {

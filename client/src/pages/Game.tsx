@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { ToastAction } from "@/components/ui/toast";
-import { ArrowLeft, Crown, Users, Trophy, Frown, Handshake } from "lucide-react";
+import { ArrowLeft, Crown, Users, Trophy, Frown, Handshake, Clock } from "lucide-react";
 import { getCurrentUserId, getCurrentUsername } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -38,6 +38,7 @@ export default function Game() {
   const [hostGameCode, setHostGameCode] = useState<string | null>(null);
   const [lastOpponentMove, setLastOpponentMove] = useState<{ from: Square; to: Square } | null>(null);
   const [lastMyMove, setLastMyMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [now, setNow] = useState(Date.now());
   const wsRef = useRef<WebSocket | null>(null);
 
   const currentUserId = getCurrentUserId();
@@ -71,15 +72,17 @@ export default function Game() {
     staleTime: 0,
     refetchInterval: (query) => {
       if (query.state.data?.status === "waiting") return 2000;
-      if (
-        query.state.data?.status === "active" &&
-        (query.state.data.mode === "online" || query.state.data.mode === "friendly")
-      ) {
-        return 2000;
-      }
+      if (query.state.data?.status === "active") return 1000;
       return false;
     },
   });
+
+  useEffect(() => {
+    if (gameData?.status !== "active") return;
+
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [gameData?.status]);
 
   useEffect(() => {
     if (gameData) {
@@ -203,6 +206,11 @@ export default function Game() {
       queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
     },
     onError: (error: Error) => {
+      if (currentGameId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
+      }
       toast({
         variant: "destructive",
         title: "Invalid move",
@@ -321,6 +329,43 @@ export default function Game() {
     if (gameData.mode === "ai") return game.turn() === "w";
     if (playerColor === "white") return game.turn() === "w";
     return game.turn() === "b";
+  };
+
+  const getDisplayedTime = (color: "white" | "black") => {
+    if (!gameData) return 25 * 60 * 1000;
+
+    const baseTime = color === "white" ? gameData.whiteTimeMs : gameData.blackTimeMs;
+    if (gameData.status !== "active" || gameData.currentTurn !== color) {
+      return Math.max(0, baseTime);
+    }
+
+    const elapsed = Math.max(0, now - new Date(gameData.updatedAt).getTime());
+    return Math.max(0, baseTime - elapsed);
+  };
+
+  const formatClock = (timeMs: number) => {
+    const totalSeconds = Math.ceil(timeMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const renderClock = (color: "white" | "black") => {
+    const timeMs = getDisplayedTime(color);
+    const isActive = gameData?.status === "active" && gameData.currentTurn === color;
+    const isLow = timeMs <= 60 * 1000;
+
+    return (
+      <div
+        className={`h-8 min-w-[74px] rounded-md border px-2 flex items-center justify-center gap-1 font-mono text-sm font-semibold ${
+          isActive ? "bg-primary/10 border-primary/40 text-primary" : "bg-muted/60 border-border text-foreground"
+        } ${isLow ? "text-destructive border-destructive/50 bg-destructive/10" : ""}`}
+        data-testid={`timer-${color}`}
+      >
+        <Clock className="w-3.5 h-3.5" />
+        {formatClock(timeMs)}
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -461,7 +506,13 @@ export default function Game() {
               </div>
             </div>
             {!isMyTurn() && gameData?.status === "active" && (
-              <Badge className="bg-primary text-primary-foreground animate-pulse text-[10px] px-1.5 py-0.5">Thinking...</Badge>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-primary text-primary-foreground animate-pulse text-[10px] px-1.5 py-0.5">Thinking...</Badge>
+                {renderClock(playerColor === "white" ? "black" : "white")}
+              </div>
+            )}
+            {(isMyTurn() || gameData?.status !== "active") && (
+              renderClock(playerColor === "white" ? "black" : "white")
             )}
           </div>
 
@@ -502,7 +553,13 @@ export default function Game() {
               </div>
             </div>
             {isMyTurn() && gameData?.status === "active" && (
-              <Badge className="bg-chart-2 text-white animate-pulse text-[10px] px-1.5 py-0.5">Your turn</Badge>
+              <div className="flex items-center gap-2">
+                <Badge className="bg-chart-2 text-white animate-pulse text-[10px] px-1.5 py-0.5">Your turn</Badge>
+                {renderClock(playerColor)}
+              </div>
+            )}
+            {(!isMyTurn() || gameData?.status !== "active") && (
+              renderClock(playerColor)
             )}
           </div>
         </div>

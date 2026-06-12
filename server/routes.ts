@@ -7,7 +7,7 @@ import jwt from "jsonwebtoken";
 import { Chess } from "chess.js";
 import { nanoid } from "nanoid";
 import { storage } from "./storage";
-import { insertUserSchema, insertGameSchema, insertChatMessageSchema } from "@shared/schema";
+import { insertUserSchema, insertGameSchema, insertChatMessageSchema, type Game } from "@shared/schema";
 
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET environment variable must be set for JWT authentication");
@@ -42,6 +42,7 @@ const authMiddleware = async (
 const gameConnections = new Map<string, Set<WebSocket>>();
 const waitingOnlineGames = new Map<string, string>();
 const pendingDrawOffers = new Map<string, string>();
+const GAME_CLOCK_MS = 25 * 60 * 1000;
 
 function notifyGame(gameId: string, payload: unknown) {
   const connections = gameConnections.get(gameId);
@@ -63,6 +64,64 @@ async function findConnectedWaitingGame(excludeUserId: string) {
 
   const waitingPlayerId = waitingOnlineGames.get(waitingGame.id);
   return waitingPlayerId === waitingGame.player1Id ? waitingGame : undefined;
+}
+
+function getClockSnapshot(game: Game, now = Date.now()) {
+  let whiteTimeMs = game.whiteTimeMs ?? GAME_CLOCK_MS;
+  let blackTimeMs = game.blackTimeMs ?? GAME_CLOCK_MS;
+
+  if (game.status === "active") {
+    const elapsedMs = Math.max(0, now - new Date(game.updatedAt).getTime());
+    if (game.currentTurn === "black") {
+      blackTimeMs = Math.max(0, blackTimeMs - elapsedMs);
+    } else {
+      whiteTimeMs = Math.max(0, whiteTimeMs - elapsedMs);
+    }
+  }
+
+  return { whiteTimeMs, blackTimeMs };
+}
+
+function getTimeoutResult(game: Game, timers: { whiteTimeMs: number; blackTimeMs: number }) {
+  if (timers.whiteTimeMs <= 0) {
+    return {
+      result: "black",
+      winnerId: game.player2Id || undefined,
+      loserId: game.player1Id || undefined,
+    };
+  }
+
+  if (timers.blackTimeMs <= 0) {
+    return {
+      result: "white",
+      winnerId: game.player1Id || undefined,
+      loserId: game.player2Id || undefined,
+    };
+  }
+
+  return null;
+}
+
+async function settleClockTimeout(game: Game) {
+  if (game.status !== "active") return false;
+
+  const timers = getClockSnapshot(game);
+  const timeout = getTimeoutResult(game, timers);
+  if (!timeout) return false;
+
+  await storage.updateGameTimers(game.id, timers.whiteTimeMs, timers.blackTimeMs);
+  await storage.finishGame(game.id, timeout.result, timeout.winnerId);
+  pendingDrawOffers.delete(game.id);
+
+  if (timeout.winnerId) {
+    await storage.updateUserStatsForMode(timeout.winnerId, game.mode, game.difficulty, "win");
+  }
+  if (timeout.loserId) {
+    await storage.updateUserStatsForMode(timeout.loserId, game.mode, game.difficulty, "loss");
+  }
+
+  notifyGame(game.id, { type: "gameOver", gameId: game.id });
+  return true;
 }
 
 async function getAIMove(fen: string, difficulty: string): Promise<{ from: string; to: string; promotion?: string } | null> {
@@ -250,6 +309,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/game/:id", authMiddleware, async (req: AuthRequest, res) => {
     try {
+      const activeGame = await storage.getGame(req.params.id);
+      if (activeGame) {
+        await settleClockTimeout(activeGame);
+      }
+
       const game = await storage.getGameWithPlayers(req.params.id);
       if (!game) {
         return res.status(404).json({ message: "Game not found" });
@@ -269,6 +333,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Game not found" });
       }
 
+      if (await settleClockTimeout(game)) {
+        return res.status(400).json({ message: "Time expired" });
+      }
+
       const chess = new Chess(game.fen);
       const move = chess.move({ from, to, promotion });
       
@@ -276,7 +344,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid move" });
       }
 
-      await storage.updateGameFen(gameId, chess.fen(), chess.pgn());
+      const timers = getClockSnapshot(game);
+      await storage.updateGameFen(
+        gameId,
+        chess.fen(),
+        chess.pgn(),
+        chess.turn() === "w" ? "white" : "black",
+        timers.whiteTimeMs,
+        timers.blackTimeMs,
+      );
 
       if (chess.isGameOver()) {
         let result = "draw";
@@ -314,7 +390,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("AI move failed:", aiMove);
             return res.json({ fen: chess.fen(), pgn: chess.pgn() });
           }
-          await storage.updateGameFen(gameId, chess.fen(), chess.pgn());
+          await storage.updateGameFen(
+            gameId,
+            chess.fen(),
+            chess.pgn(),
+            chess.turn() === "w" ? "white" : "black",
+            timers.whiteTimeMs,
+            timers.blackTimeMs,
+          );
 
           if (chess.isGameOver()) {
             let result = "draw";
