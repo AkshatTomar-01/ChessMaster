@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import { ToastAction } from "@/components/ui/toast";
 import { ArrowLeft, Crown, Users, Trophy, Frown, Handshake } from "lucide-react";
 import { getCurrentUserId, getCurrentUsername } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +42,28 @@ export default function Game() {
 
   const currentUserId = getCurrentUserId();
   const currentUsername = getCurrentUsername();
+
+  const acceptDrawOffer = async (drawGameId: string) => {
+    try {
+      const data = await apiRequest("POST", "/api/game/draw", { gameId: drawGameId });
+      if (data.game) {
+        queryClient.setQueryData(["/api/game", drawGameId], data.game);
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/game", drawGameId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
+      toast({
+        title: "Draw accepted",
+        description: "The game has ended in a draw.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    }
+  };
 
   const { data: gameData, isLoading: gameLoading } = useQuery<GameWithPlayers>({
     queryKey: ["/api/game", currentGameId],
@@ -106,6 +129,17 @@ export default function Game() {
           queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
           queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
           queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
+        } else if (data.type === "drawOffer") {
+          if (data.offeredBy === currentUserId) return;
+          toast({
+            title: "Draw offered",
+            description: `${data.offeredByUsername || "Opponent"} offered a draw.`,
+            action: (
+              <ToastAction altText="Accept draw" onClick={() => acceptDrawOffer(data.gameId || currentGameId)}>
+                Accept
+              </ToastAction>
+            ),
+          });
         } else if (data.type === "playerJoined") {
           queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
         } else if (data.type === "opponentAbandoned") {
@@ -241,16 +275,10 @@ export default function Game() {
   const handleOfferDraw = async () => {
     if (!currentGameId) return;
     try {
-      const data = await apiRequest("POST", "/api/game/draw", { gameId: currentGameId });
-      if (data.game) {
-        queryClient.setQueryData(["/api/game", currentGameId], data.game);
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
+      await apiRequest("POST", "/api/game/draw-offer", { gameId: currentGameId });
       toast({
-        title: "Draw accepted",
-        description: "The game has ended in a draw.",
+        title: "Draw offered",
+        description: "Waiting for your opponent to accept.",
       });
     } catch (error: any) {
       toast({

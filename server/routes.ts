@@ -41,6 +41,7 @@ const authMiddleware = async (
 
 const gameConnections = new Map<string, Set<WebSocket>>();
 const waitingOnlineGames = new Map<string, string>();
+const pendingDrawOffers = new Map<string, string>();
 
 function notifyGame(gameId: string, payload: unknown) {
   const connections = gameConnections.get(gameId);
@@ -287,6 +288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         await storage.finishGame(gameId, result, winnerId);
+        pendingDrawOffers.delete(gameId);
 
         if (winnerId) {
           const loserId = winnerId === game.player1Id ? game.player2Id! : game.player1Id;
@@ -324,6 +326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
 
             await storage.finishGame(gameId, result, winnerId);
+            pendingDrawOffers.delete(gameId);
 
             if (winnerId) {
               await storage.updateUserStatsForMode(winnerId, game.mode, game.difficulty, "win");
@@ -353,11 +356,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = winnerId === game.player1Id ? "white" : "black";
 
       await storage.finishGame(gameId, result, winnerId || undefined);
+      pendingDrawOffers.delete(gameId);
 
       if (winnerId) {
         await storage.updateUserStatsForMode(winnerId, game.mode, game.difficulty, "win");
       }
       await storage.updateUserStatsForMode(req.userId!, game.mode, game.difficulty, "loss");
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/game/draw-offer", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { gameId } = req.body;
+
+      const game = await storage.getGame(gameId);
+      if (!game) {
+        return res.status(404).json({ message: "Game not found" });
+      }
+
+      if (game.status !== "active") {
+        return res.status(400).json({ message: "Game is not active" });
+      }
+
+      if (req.userId !== game.player1Id && req.userId !== game.player2Id) {
+        return res.status(403).json({ message: "You are not part of this game" });
+      }
+
+      if (!game.player1Id || !game.player2Id) {
+        return res.status(400).json({ message: "No opponent to offer a draw" });
+      }
+
+      pendingDrawOffers.set(gameId, req.userId!);
+      const user = await storage.getUserProfile(req.userId!);
+      notifyGame(gameId, {
+        type: "drawOffer",
+        gameId,
+        offeredBy: req.userId,
+        offeredByUsername: user?.username || "Opponent",
+      });
 
       res.json({ success: true });
     } catch (error: any) {
@@ -382,7 +422,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You are not part of this game" });
       }
 
+      const offeredBy = pendingDrawOffers.get(gameId);
+      if (!offeredBy) {
+        return res.status(400).json({ message: "No draw offer to accept" });
+      }
+
+      if (offeredBy === req.userId) {
+        return res.status(400).json({ message: "Opponent must accept the draw offer" });
+      }
+
       await storage.finishGame(gameId, "draw");
+      pendingDrawOffers.delete(gameId);
 
       if (game.player1Id) {
         await storage.updateUserStatsForMode(game.player1Id, game.mode, game.difficulty, "draw");
@@ -530,6 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (winnerId) {
             const result = winnerId === activeGame.player1Id ? "white" : "black";
             await storage.finishGame(currentGameId, result, winnerId);
+            pendingDrawOffers.delete(currentGameId);
             await storage.updateUserStatsForMode(winnerId, activeGame.mode, activeGame.difficulty, "win");
             await storage.updateUserStatsForMode(currentUserId, activeGame.mode, activeGame.difficulty, "loss");
             const connections = gameConnections.get(currentGameId);
