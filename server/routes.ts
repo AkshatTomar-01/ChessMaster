@@ -365,6 +365,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/game/draw", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { gameId } = req.body;
+
+      const game = await storage.getGame(gameId);
+      if (!game) {
+        return res.status(404).json({ message: "Game not found" });
+      }
+
+      if (game.status !== "active") {
+        return res.status(400).json({ message: "Game is not active" });
+      }
+
+      if (req.userId !== game.player1Id && req.userId !== game.player2Id) {
+        return res.status(403).json({ message: "You are not part of this game" });
+      }
+
+      await storage.finishGame(gameId, "draw");
+
+      if (game.player1Id) {
+        await storage.updateUserStatsForMode(game.player1Id, game.mode, game.difficulty, "draw");
+      }
+      if (game.player2Id) {
+        await storage.updateUserStatsForMode(game.player2Id, game.mode, game.difficulty, "draw");
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/game/chat", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const { gameId, message } = req.body;

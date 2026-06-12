@@ -231,10 +231,27 @@ export default function Game() {
   };
 
   const handleOfferDraw = async () => {
-    toast({
-      title: "Draw offered",
-      description: "Your opponent will be notified.",
-    });
+    if (!currentGameId) return;
+    try {
+      await apiRequest("POST", "/api/game/draw", { gameId: currentGameId });
+      wsRef.current?.send(JSON.stringify({
+        type: "gameOver",
+        gameId: currentGameId,
+      }));
+      queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
+      toast({
+        title: "Draw accepted",
+        description: "The game has ended in a draw.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    }
   };
 
   const getInitials = (username?: string) => {
