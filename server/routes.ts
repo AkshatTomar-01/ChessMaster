@@ -40,6 +40,29 @@ const authMiddleware = async (
 };
 
 const gameConnections = new Map<string, Set<WebSocket>>();
+const waitingOnlineGames = new Map<string, string>();
+
+function notifyGame(gameId: string, payload: unknown) {
+  const connections = gameConnections.get(gameId);
+  if (!connections) return;
+
+  connections.forEach((clientWs) => {
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.send(JSON.stringify(payload));
+    }
+  });
+}
+
+async function findConnectedWaitingGame(excludeUserId: string) {
+  const connectedGameIds = Array.from(waitingOnlineGames.entries())
+    .filter(([, waitingPlayerId]) => waitingPlayerId !== excludeUserId)
+    .map(([gameId]) => gameId);
+  const waitingGame = await storage.findWaitingOnlineGame(excludeUserId, connectedGameIds);
+  if (!waitingGame) return undefined;
+
+  const waitingPlayerId = waitingOnlineGames.get(waitingGame.id);
+  return waitingPlayerId === waitingGame.player1Id ? waitingGame : undefined;
+}
 
 async function getAIMove(fen: string, difficulty: string): Promise<{ from: string; to: string; promotion?: string } | null> {
   const game = new Chess(fen);
@@ -167,9 +190,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { mode, difficulty, gameCode } = req.body;
       
       if (mode === "online") {
-        const waitingGame = await storage.findWaitingOnlineGame(req.userId!);
+        const waitingGame = await findConnectedWaitingGame(req.userId!);
         if (waitingGame) {
           await storage.joinGame(waitingGame.id, req.userId!);
+          waitingOnlineGames.delete(waitingGame.id);
+          notifyGame(waitingGame.id, { type: "playerJoined", gameId: waitingGame.id });
           return res.json({ gameId: waitingGame.id });
         }
       }
@@ -258,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (chess.isCheckmate()) {
           result = chess.turn() === "w" ? "black" : "white";
-          winnerId = chess.turn() === "w" ? game.player2Id || undefined : game.player1Id;
+          winnerId = chess.turn() === "w" ? game.player2Id || undefined : game.player1Id || undefined;
         }
 
         await storage.finishGame(gameId, result, winnerId);
@@ -295,7 +320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             if (chess.isCheckmate()) {
               result = chess.turn() === "w" ? "black" : "white";
-              winnerId = chess.turn() === "b" ? game.player1Id : undefined;
+              winnerId = chess.turn() === "b" ? game.player1Id || undefined : undefined;
             }
 
             await storage.finishGame(gameId, result, winnerId);
@@ -390,19 +415,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const message = JSON.parse(data.toString());
 
         if (message.type === "join") {
-          currentGameId = message.gameId;
-          currentUserId = message.userId;
+          const joinedGameId = String(message.gameId);
+          const joinedUserId = String(message.userId);
+          currentGameId = joinedGameId;
+          currentUserId = joinedUserId;
           
-          if (!gameConnections.has(currentGameId)) {
-            gameConnections.set(currentGameId, new Set());
+          if (!gameConnections.has(joinedGameId)) {
+            gameConnections.set(joinedGameId, new Set());
           }
-          gameConnections.get(currentGameId)!.add(ws);
+          gameConnections.get(joinedGameId)!.add(ws);
 
-          const connections = gameConnections.get(currentGameId);
+          const joinedGame = await storage.getGame(joinedGameId);
+          if (
+            joinedGame?.mode === "online" &&
+            joinedGame.status === "waiting" &&
+            joinedGame.player1Id === joinedUserId
+          ) {
+            waitingOnlineGames.set(joinedGameId, joinedUserId);
+          }
+
+          const connections = gameConnections.get(joinedGameId);
           if (connections && connections.size > 1) {
             connections.forEach((clientWs) => {
               if (clientWs.readyState === WebSocket.OPEN) {
-                clientWs.send(JSON.stringify({ type: "playerJoined", gameId: currentGameId }));
+                clientWs.send(JSON.stringify({ type: "playerJoined", gameId: joinedGameId }));
               }
             });
           }
@@ -442,6 +478,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on("close", async () => {
       if (currentGameId && currentUserId) {
         const activeGame = await storage.getGame(currentGameId);
+        if (
+          activeGame &&
+          activeGame.mode === "online" &&
+          activeGame.status === "waiting" &&
+          activeGame.player1Id === currentUserId
+        ) {
+          waitingOnlineGames.delete(currentGameId);
+          await storage.expireWaitingGame(currentGameId);
+        }
+
         if (activeGame && activeGame.status === "active") {
           const winnerId = activeGame.player1Id === currentUserId
             ? activeGame.player2Id

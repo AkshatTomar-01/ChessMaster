@@ -5,7 +5,7 @@ import {
   type UserProfile, type GameWithPlayers, type ChatMessageWithUser,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, or, and, sql } from "drizzle-orm";
+import { eq, desc, or, and, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -14,7 +14,7 @@ export interface IStorage {
   getUserProfile(id: string): Promise<UserProfile | undefined>;
   updateUserStats(id: string, wins: number, losses: number, draws: number): Promise<void>;
   updateUserStatsForMode(id: string, mode: string, difficulty: string | null, outcome: "win" | "loss" | "draw"): Promise<void>;
-  createGame(game: Partial<InsertGame> & { player1Id: string }): Promise<Game>;
+  createGame(game: Partial<Game> & { player1Id: string }): Promise<Game>;
   getGame(id: string): Promise<Game | undefined>;
   getGameWithPlayers(id: string): Promise<GameWithPlayers | undefined>;
   updateGameFen(id: string, fen: string, pgn: string): Promise<void>;
@@ -22,7 +22,8 @@ export interface IStorage {
   getUserGames(userId: string, limit?: number, onlyFinished?: boolean): Promise<GameWithPlayers[]>;
   getGameByCode(code: string): Promise<Game | undefined>;
   joinGame(gameId: string, player2Id: string): Promise<void>;
-  findWaitingOnlineGame(excludeUserId: string): Promise<Game | undefined>;
+  findWaitingOnlineGame(excludeUserId: string, availableGameIds?: string[]): Promise<Game | undefined>;
+  expireWaitingGame(gameId: string): Promise<void>;
   createChatMessage(message: InsertChatMessage & { userId: string }): Promise<ChatMessage>;
   getGameChatMessages(gameId: string): Promise<ChatMessageWithUser[]>;
 }
@@ -90,7 +91,7 @@ export class DatabaseStorage implements IStorage {
     await db.update(users).set(update).where(eq(users.id, id));
   }
 
-  async createGame(game: Partial<InsertGame> & { player1Id: string }): Promise<Game> {
+  async createGame(game: Partial<Game> & { player1Id: string }): Promise<Game> {
     const [newGame] = await db.insert(games).values(game as any).returning();
     return newGame;
   }
@@ -140,11 +141,24 @@ export class DatabaseStorage implements IStorage {
     await db.update(games).set({ player2Id, status: "active", updatedAt: new Date() }).where(eq(games.id, gameId));
   }
 
-  async findWaitingOnlineGame(excludeUserId: string): Promise<Game | undefined> {
+  async findWaitingOnlineGame(excludeUserId: string, availableGameIds?: string[]): Promise<Game | undefined> {
+    if (availableGameIds && availableGameIds.length === 0) return undefined;
+
     const [game] = await db.select().from(games).where(
-      and(eq(games.mode, "online"), eq(games.status, "waiting"), sql`${games.player1Id} != ${excludeUserId}`)
+      and(
+        eq(games.mode, "online"),
+        eq(games.status, "waiting"),
+        sql`${games.player1Id} != ${excludeUserId}`,
+        availableGameIds ? inArray(games.id, availableGameIds) : undefined,
+      )
     ).limit(1);
     return game || undefined;
+  }
+
+  async expireWaitingGame(gameId: string): Promise<void> {
+    await db.update(games)
+      .set({ status: "expired", updatedAt: new Date() })
+      .where(and(eq(games.id, gameId), eq(games.status, "waiting")));
   }
 
   async createChatMessage(message: InsertChatMessage & { userId: string }): Promise<ChatMessage> {
