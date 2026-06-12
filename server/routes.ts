@@ -422,13 +422,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You are not part of this game" });
       }
 
-      const offeredBy = pendingDrawOffers.get(gameId);
-      if (!offeredBy) {
-        return res.status(400).json({ message: "No draw offer to accept" });
-      }
+      if (game.mode === "ai") {
+        if (req.userId !== game.player1Id) {
+          return res.status(403).json({ message: "You are not part of this game" });
+        }
+      } else {
+        const offeredBy = pendingDrawOffers.get(gameId);
+        if (!offeredBy) {
+          return res.status(400).json({ message: "No draw offer to accept" });
+        }
 
-      if (offeredBy === req.userId) {
-        return res.status(400).json({ message: "Opponent must accept the draw offer" });
+        if (offeredBy === req.userId) {
+          return res.status(400).json({ message: "Opponent must accept the draw offer" });
+        }
       }
 
       await storage.finishGame(gameId, "draw");

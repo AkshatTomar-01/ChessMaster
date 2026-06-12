@@ -275,6 +275,21 @@ export default function Game() {
   const handleOfferDraw = async () => {
     if (!currentGameId) return;
     try {
+      if (mode === "ai") {
+        const data = await apiRequest("POST", "/api/game/draw", { gameId: currentGameId });
+        if (data.game) {
+          queryClient.setQueryData(["/api/game", currentGameId], data.game);
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
+        toast({
+          title: "Draw accepted",
+          description: "The game has ended in a draw.",
+        });
+        return;
+      }
+
       await apiRequest("POST", "/api/game/draw-offer", { gameId: currentGameId });
       toast({
         title: "Draw offered",
