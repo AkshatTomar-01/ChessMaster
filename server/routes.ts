@@ -391,7 +391,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserStatsForMode(game.player2Id, game.mode, game.difficulty, "draw");
       }
 
-      res.json({ success: true });
+      notifyGame(gameId, { type: "gameOver", gameId });
+
+      const finishedGame = await storage.getGameWithPlayers(gameId);
+      res.json({ success: true, game: finishedGame });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

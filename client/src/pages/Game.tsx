@@ -48,6 +48,12 @@ export default function Game() {
     staleTime: 0,
     refetchInterval: (query) => {
       if (query.state.data?.status === "waiting") return 2000;
+      if (
+        query.state.data?.status === "active" &&
+        (query.state.data.mode === "online" || query.state.data.mode === "friendly")
+      ) {
+        return 2000;
+      }
       return false;
     },
   });
@@ -98,6 +104,8 @@ export default function Game() {
           queryClient.invalidateQueries({ queryKey: [`/api/game/chat/${currentGameId}`] });
         } else if (data.type === "gameOver") {
           queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
+          queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
         } else if (data.type === "playerJoined") {
           queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
         } else if (data.type === "opponentAbandoned") {
@@ -233,11 +241,10 @@ export default function Game() {
   const handleOfferDraw = async () => {
     if (!currentGameId) return;
     try {
-      await apiRequest("POST", "/api/game/draw", { gameId: currentGameId });
-      wsRef.current?.send(JSON.stringify({
-        type: "gameOver",
-        gameId: currentGameId,
-      }));
+      const data = await apiRequest("POST", "/api/game/draw", { gameId: currentGameId });
+      if (data.game) {
+        queryClient.setQueryData(["/api/game", currentGameId], data.game);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/game", currentGameId] });
       queryClient.invalidateQueries({ queryKey: ["/api/game/recent"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auth/profile"] });
