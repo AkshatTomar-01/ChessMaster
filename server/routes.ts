@@ -365,6 +365,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/game/cancel", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { gameId } = req.body;
+      const game = await storage.getGame(gameId);
+      if (!game) return res.status(404).json({ message: "Game not found" });
+      if (game.player1Id !== req.userId) return res.status(403).json({ message: "Not your game" });
+      if (game.status !== "waiting") return res.status(400).json({ message: "Game already started" });
+      await storage.deleteWaitingGame(gameId, req.userId!);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/api/game/recent", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const games = await storage.getUserGames(req.userId!, 5, false);

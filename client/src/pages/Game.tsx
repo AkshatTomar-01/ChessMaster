@@ -421,7 +421,16 @@ export default function Game() {
             ) : (
               <p className="text-muted-foreground mb-4">Waiting for another player to join</p>
             )}
-            <Button onClick={() => setLocation("/dashboard")} variant="outline" data-testid="button-cancel">
+            <Button
+              onClick={async () => {
+                if (currentGameId) {
+                  try { await apiRequest("POST", "/api/game/cancel", { gameId: currentGameId }); } catch {}
+                }
+                setLocation("/dashboard");
+              }}
+              variant="outline"
+              data-testid="button-cancel"
+            >
               Cancel
             </Button>
           </CardContent>

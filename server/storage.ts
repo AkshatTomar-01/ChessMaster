@@ -25,6 +25,7 @@ export interface IStorage {
   joinGame(gameId: string, player2Id: string): Promise<void>;
   findWaitingOnlineGame(excludeUserId: string, availableGameIds?: string[]): Promise<Game | undefined>;
   expireWaitingGame(gameId: string): Promise<void>;
+  deleteWaitingGame(gameId: string, userId: string): Promise<void>;
   createChatMessage(message: InsertChatMessage & { userId: string }): Promise<ChatMessage>;
   getGameChatMessages(gameId: string): Promise<ChatMessageWithUser[]>;
 }
@@ -171,6 +172,11 @@ export class DatabaseStorage implements IStorage {
     await db.update(games)
       .set({ status: "expired", updatedAt: new Date() })
       .where(and(eq(games.id, gameId), eq(games.status, "waiting")));
+  }
+
+  async deleteWaitingGame(gameId: string, userId: string): Promise<void> {
+    await db.delete(games)
+      .where(and(eq(games.id, gameId), eq(games.player1Id, userId), eq(games.status, "waiting")));
   }
 
   async createChatMessage(message: InsertChatMessage & { userId: string }): Promise<ChatMessage> {
