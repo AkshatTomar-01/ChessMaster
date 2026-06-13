@@ -124,72 +124,148 @@ async function settleClockTimeout(game: Game) {
   return true;
 }
 
+const pieceValues: Record<string, number> = {
+  p: 100,
+  n: 320,
+  b: 330,
+  r: 500,
+  q: 900,
+  k: 0,
+};
+
+const centerSquares = new Set(["d4", "e4", "d5", "e5"]);
+const nearCenterSquares = new Set(["c3", "d3", "e3", "f3", "c4", "f4", "c5", "f5", "c6", "d6", "e6", "f6"]);
+
+function evaluateBoard(game: Chess) {
+  if (game.isCheckmate()) {
+    return game.turn() === "w" ? 100000 : -100000;
+  }
+  if (game.isDraw()) return 0;
+
+  let score = 0;
+  const board = game.board();
+
+  for (let rank = 0; rank < board.length; rank++) {
+    for (let file = 0; file < board[rank].length; file++) {
+      const piece = board[rank][file];
+      if (!piece) continue;
+
+      const square = `${String.fromCharCode(97 + file)}${8 - rank}`;
+      const direction = piece.color === "w" ? 1 : -1;
+      let value = pieceValues[piece.type] || 0;
+
+      if (centerSquares.has(square)) value += 18;
+      else if (nearCenterSquares.has(square)) value += 8;
+
+      if (piece.type === "p") {
+        value += direction * (piece.color === "w" ? 6 - rank : rank - 1);
+      }
+      if ((piece.type === "n" || piece.type === "b") && (rank === 0 || rank === 7)) {
+        value -= 12;
+      }
+
+      score += piece.color === "w" ? value : -value;
+    }
+  }
+
+  const turn = game.turn();
+  const whiteMobility = turn === "w" ? game.moves().length : 0;
+  if (turn === "b") {
+    score -= game.moves().length * 2;
+  } else {
+    score += whiteMobility * 2;
+  }
+
+  if (game.inCheck()) {
+    score += game.turn() === "w" ? -35 : 35;
+  }
+
+  return score;
+}
+
+function scoreMoveForOrdering(move: any) {
+  let score = 0;
+  if (move.captured) {
+    score += (pieceValues[move.captured] || 0) * 10 - (pieceValues[move.piece] || 0);
+  }
+  if (move.promotion) score += pieceValues[move.promotion] || 900;
+  if (move.san.includes("#")) score += 100000;
+  else if (move.san.includes("+")) score += 60;
+  if (centerSquares.has(move.to)) score += 25;
+  if (move.flags.includes("k") || move.flags.includes("q")) score += 20;
+  return score;
+}
+
+function orderedMoves(game: Chess) {
+  return game.moves({ verbose: true }).sort((a, b) => scoreMoveForOrdering(b) - scoreMoveForOrdering(a));
+}
+
+function minimax(game: Chess, depth: number, alpha: number, beta: number): number {
+  if (depth === 0 || game.isGameOver()) {
+    return evaluateBoard(game);
+  }
+
+  const moves = orderedMoves(game);
+  if (game.turn() === "w") {
+    let best = -Infinity;
+    for (const move of moves) {
+      game.move(move);
+      best = Math.max(best, minimax(game, depth - 1, alpha, beta));
+      game.undo();
+      alpha = Math.max(alpha, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+
+  let best = Infinity;
+  for (const move of moves) {
+    game.move(move);
+    best = Math.min(best, minimax(game, depth - 1, alpha, beta));
+    game.undo();
+    beta = Math.min(beta, best);
+    if (beta <= alpha) break;
+  }
+  return best;
+}
+
 async function getAIMove(fen: string, difficulty: string): Promise<{ from: string; to: string; promotion?: string } | null> {
   const game = new Chess(fen);
-  const moves = game.moves({ verbose: true });
-  
+  const moves = orderedMoves(game);
+
   if (moves.length === 0) return null;
 
-  const scoredMoves = moves.map(move => {
-    let score = 0;
-    
-    const pieceValues: Record<string, number> = {
-      'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9, 'k': 0
-    };
-    
-    if (move.captured) {
-      score += pieceValues[move.captured] * 10;
-    }
-    if (move.san.includes('+')) {
-      score += 5;
-    }
-    if (move.san.includes('#')) {
-      score += 1000;
-    }
-    if (['e4', 'e5', 'd4', 'd5'].includes(move.to)) {
-      score += 2;
-    }
-    if (move.flags.includes('p')) {
-      score += 8;
-    }
-    if (move.flags.includes('k') || move.flags.includes('q')) {
-      score += 3;
-    }
-    const moveCount = game.history().length;
-    if ((move.piece === 'n' || move.piece === 'b') && moveCount < 20) {
-      score += 1;
-    }
-    
-    return { move, score };
-  });
+  let selectedMove: any;
 
-  scoredMoves.sort((a, b) => b.score - a.score);
-
-  let selectedMove;
-  
   if (difficulty === "easy") {
-    const weakMoves = scoredMoves.slice(Math.floor(scoredMoves.length * 0.6));
-    selectedMove = weakMoves.length > 0 
-      ? weakMoves[Math.floor(Math.random() * weakMoves.length)].move
-      : scoredMoves[scoredMoves.length - 1].move;
+    const looseMoves = moves.slice(Math.floor(moves.length * 0.45));
+    selectedMove = looseMoves[Math.floor(Math.random() * looseMoves.length)] || moves[moves.length - 1];
   } else if (difficulty === "medium") {
-    const goodMoves = scoredMoves.slice(0, Math.ceil(scoredMoves.length * 0.6));
+    const scoredMoves = moves.map((move) => {
+      game.move(move);
+      const score = minimax(game, 1, -Infinity, Infinity);
+      game.undo();
+      return { move, score };
+    });
+    scoredMoves.sort((a, b) => a.score - b.score);
+    const goodMoves = scoredMoves.slice(0, Math.max(1, Math.ceil(scoredMoves.length * 0.35)));
     selectedMove = goodMoves[Math.floor(Math.random() * goodMoves.length)].move;
   } else {
-    const bestMoves = scoredMoves.slice(0, Math.max(1, Math.ceil(scoredMoves.length * 0.3)));
-    selectedMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+    const scoredMoves = moves.map((move) => {
+      game.move(move);
+      const score = minimax(game, 3, -Infinity, Infinity);
+      game.undo();
+      return { move, score };
+    });
+    scoredMoves.sort((a, b) => a.score - b.score);
+    selectedMove = scoredMoves[0].move;
   }
-  
-  const result: { from: string; to: string; promotion?: string } = { 
-    from: selectedMove.from, 
-    to: selectedMove.to 
+
+  return {
+    from: selectedMove.from,
+    to: selectedMove.to,
+    promotion: selectedMove.flags.includes("p") ? "q" : selectedMove.promotion,
   };
-  
-  if (selectedMove.flags.includes('p')) {
-    result.promotion = 'q';
-  }
-  
-  return result;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
