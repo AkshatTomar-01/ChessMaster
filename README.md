@@ -1,4 +1,4 @@
-# ♟️ Real-Time Multiplayer Chess Platform
+# ChessMaster ♟️ Real-Time Multiplayer Chess Platform
 
 A full-stack chess application that supports AI games, online matchmaking, and private games with real-time gameplay, chat, and chess clocks.
 
